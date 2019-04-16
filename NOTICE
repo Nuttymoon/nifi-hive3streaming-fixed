@@ -1,0 +1,82 @@
+NiFi Hive3Streaming Fixed
+Copyright 2019 Gauthier Leonard
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+This includes derived works from the Apache NiFi (ASLv2 licensed) project (https://github.com/apache/nifi):
+  Copyright 2014-2018 The Apache Software Foundation
+  The derived work is adapted from:
+    nifi-nar-bundles/nifi-hive-bundle
+      pom.xml
+    nifi-nar-bundles/nifi-hive-bundle/nifi-hive3-nar
+      pom.xml
+    nifi-nar-bundles/nifi-hive-bundle/nifi-hive3-processors
+      pom.xml
+      src/main/java/org/apache/hive/streaming
+        HiveRecordWriter.java
+        NiFiRecordSerDe.java
+      src/main/java/org/apache/nifi/dbcp/hive
+        Hive3ConnectionPool.java
+      src/main/java/org/apache/nifi/util/hive
+        AuthenticationFailedException.java
+        HiveConfigurator.java
+        HiveJdbcCommon.java
+        HiveOptions.java
+        ValidationResources.java
+        CsvOutputOptions.java
+        HiveUtils.java
+      src/main/java/org/apache/nifi/processors/hive
+        PutHive3Streaming.java
+        AbstractHive3QLProcessor.java
+      src/test/java/org/apache/hive/streaming
+        StubSerializationError.java
+        StubStreamingIOFailure.java
+        StubTransactionError.java
+        StubConnectionError.java
+      src/test/java/org/apache/nifi/dbcp/hive
+        hive/Hive3ConnectionPoolTest.java
+      src/test/java/org/apache/nifi/processors/hive
+        hive/TestPutHive3Streaming.java
+      src/test/resources
+  and can be found in the directories:
+    nifi-hive3streaming-fixed-bundle
+      pom.xml
+    nifi-hive3streaming-fixed-bundle/nifi-hive3streaming-fixed-nar
+      pom.xml
+    nifi-hive3streaming-fixed-bundle/nifi-hive3streaming-fixed-processors
+      pom.xml
+      src/main/java/org/apache/hive/streaming
+        HiveRecordWriterFixed.java
+        NiFiRecordSerDe.java
+      src/main/java/org/apache/nifi/dbcp/hive
+        Hive3ConnectionPool.java
+      src/main/java/org/apache/nifi/util/hive
+        AuthenticationFailedException.java
+        HiveConfigurator.java
+        HiveJdbcCommon.java
+        HiveOptions.java
+        ValidationResources.java
+        CsvOutputOptions.java
+        HiveUtils.java
+      src/main/java/org/apache/nifi/processors/hive
+        PutHive3StreamingFixed.java
+        AbstractHive3QLProcessor.java
+      src/test/java/org/apache/hive/streaming
+        StubSerializationError.java
+        StubStreamingIOFailure.java
+        StubTransactionError.java
+        StubConnectionError.java
+      src/test/java/org/apache/nifi/dbcp/hive
+        hive/Hive3ConnectionPoolTest.java
+      src/test/java/org/apache/nifi/processors/hive
+        hive/TestPutHive3StreamingFixed.java
+      src/test/resources
+
+This includes derived works from the Apache Hive (ASLv2 licensed) project (https://github.com/apache/hive):
+  Copyright 2008-2018 The Apache Software Foundation
+  The derived work is adapted from
+    streaming/src/java/org/apache/hive/streaming
+      AbstractRecordWriter.java
+      HiveStreamingConnection.java
+  and can be found in the org.apache.hadoop.hive.streaming package
