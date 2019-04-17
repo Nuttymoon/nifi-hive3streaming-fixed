@@ -42,8 +42,8 @@ I just modified the official implementation to fix the data leaks in NiFi and Hi
    ```shell
    ssh user@nifihost "
    chown nifi /usr/hdf/current/nifi/lib/nifi-hive3streaming-fixed-nar-1.0-SNAPSHOT.nar &&
-   chgrp nifi !$ &&
-   chmod 640 !$"
+   chgrp nifi /usr/hdf/current/nifi/lib/nifi-hive3streaming-fixed-nar-1.0-SNAPSHOT.nar &&
+   chmod 640 /usr/hdf/current/nifi/lib/nifi-hive3streaming-fixed-nar-1.0-SNAPSHOT.nar"
    ```
 6. Restart NiFi
 7. You should be able to see the processor in the NiFi Web UI:
