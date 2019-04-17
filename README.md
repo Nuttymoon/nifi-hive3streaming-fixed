@@ -22,28 +22,35 @@ I just modified the official implementation to fix the data leaks in NiFi and Hi
    ```
    git clone https://github.com/Nuttymoon/nifi-hive3streaming-fixed.git
    ```
-2. Build the package with Maven:
+2. Edit the `bundle/pom.xml` to match your cluster versions:
+   ```xml
+    <properties>
+        <hive3.version>3.1.0</hive3.version>
+        <hive3.hadoop.version>3.1.1</hive3.hadoop.version>
+    </properties>
    ```
-   cd nifi-hive3streaming-fixed-bundle
+3. Build the package with Maven:
+   ```
+   cd nifi-hive3streaming-fixed/bundle
    mvn clean install
    ```
-3. Copy the `nar` file generated to the `$NIFI_PATH/lib/` directory of NiFi nodes. For example, for an HDF (Hortonworks DataFlow) setup:
+4. Copy the `nar` file generated to the `$NIFI_PATH/lib/` directory of NiFi nodes. For example, for an HDF (Hortonworks DataFlow) setup:
    ```shell
    scp nifi-hive3streaming-fixed-nar/target/nifi-hive3streaming-fixed-nar-1.0-SNAPSHOT.nar user@nifihost:/usr/hdf/current/nifi/lib
    ```
-4. Don't forget to make `nifi` owner of the file:
+5. Don't forget to make `nifi` owner of the file:
    ```shell
    ssh user@nifihost "
    chown nifi /usr/hdf/current/nifi/lib/nifi-hive3streaming-fixed-nar-1.0-SNAPSHOT.nar &&
    chgrp nifi !$ &&
    chmod 640 !$"
    ```
-5. Restart NiFi
-6. You should be able to see the processor in the NiFi Web UI:
+6. Restart NiFi
+7. You should be able to see the processor in the NiFi Web UI:
 
    ![NiFi UI](images/nifi-ui.png)
 
-7. Use this processor instead of PutHive3Streaming
+8. Use this processor instead of PutHive3Streaming, it should keep NiFi from crashing.
 
 ## Feedback
 
