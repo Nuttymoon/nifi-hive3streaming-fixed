@@ -22,11 +22,11 @@ I just modified the official implementation to fix the data leaks in NiFi and Hi
    ```
    git clone https://github.com/Nuttymoon/nifi-hive3streaming-fixed.git
    ```
-2. Edit the `bundle/pom.xml` to match your cluster versions (this is for HDP 3.0.1):
+2. Edit the `bundle/pom.xml` to match your cluster versions (this is for HDF 3.2.0):
    ```xml
     <properties>
         <hive3.version>3.1.0</hive3.version>
-        <hive3.hadoop.version>3.1.1</hive3.hadoop.version>
+        <hive3.hadoop.version>3.1.0</hive3.hadoop.version>
     </properties>
    ```
 3. Build the package with Maven:
