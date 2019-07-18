@@ -27,13 +27,14 @@ package org.apache.nifi.processors.hive;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.nifi.annotation.behavior.RequiresInstanceClassLoading;
 import org.apache.hive.streaming.ConnectionError;
 /* --- CHANGED ---
  * Fix memory leak in Hive Streaming
  */
-// import org.apache.hive.streaming.HiveStreamingConnection;
+import org.apache.hive.streaming.HiveRecordWriterFixed;
+import org.apache.hive.streaming.HiveStreamingConnectionFixed;
 /* --- CHANGED --- */
 import org.apache.hive.streaming.InvalidTable;
 import org.apache.hive.streaming.SerializationError;
@@ -41,6 +42,7 @@ import org.apache.hive.streaming.StreamingConnection;
 import org.apache.hive.streaming.StreamingException;
 import org.apache.hive.streaming.StreamingIOFailure;
 import org.apache.hive.streaming.TransactionError;
+import org.apache.nifi.annotation.behavior.RequiresInstanceClassLoading;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
 import org.apache.nifi.annotation.behavior.WritesAttributes;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
@@ -71,16 +73,9 @@ import org.apache.nifi.util.StringUtils;
 import org.apache.nifi.util.hive.AuthenticationFailedException;
 import org.apache.nifi.util.hive.HiveConfigurator;
 import org.apache.nifi.util.hive.HiveOptions;
-/* --- CHANGED ---
- * Fix memory leak in Hive Streaming
- */
-import org.apache.hive.streaming.HiveRecordWriterFixed;
-import org.apache.hive.streaming.HiveStreamingConnectionFixed;
-/* --- CHANGED --- */
 import org.apache.nifi.util.hive.HiveUtils;
 import org.apache.nifi.util.hive.ValidationResources;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -97,10 +92,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static javax.sql.rowset.spi.SyncFactory.getLogger;
 import static org.apache.nifi.processors.hive.AbstractHive3QLProcessor.ATTR_OUTPUT_TABLES;
 
 @Tags({"hive", "streaming", "put", "database", "store"})
@@ -137,12 +130,12 @@ public class PutHive3StreamingFixed extends AbstractProcessor {
     static final PropertyDescriptor METASTORE_URI = new PropertyDescriptor.Builder()
             .name("hive3-stream-metastore-uri")
             .displayName("Hive Metastore URI")
-            .description("The URI location for the Hive Metastore. Note that this is not the location of the Hive Server. The default port for the "
-                    + "Hive metastore is 9043.")
-            .required(true)
+            .description("The URI location(s) for the Hive metastore. This is a comma-separated list of Hive metastore URIs; note that this is not the location of the Hive Server. "
+                    + "The default port for the Hive metastore is 9043. If this field is not set, then the 'hive.metastore.uris' property from any provided configuration resources "
+                    + "will be used, and if none are provided, then the default value from a default hive-site.xml will be used (usually thrift://localhost:9083).")
+            .required(false)
             .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
-            .addValidator(StandardValidators.URI_VALIDATOR)
-            .addValidator(StandardValidators.createRegexMatchingValidator(Pattern.compile("(^[^/]+.*[^/]+$|^[^/]+$|^$)"))) // no start with / or end with /
+            .addValidator(StandardValidators.URI_LIST_VALIDATOR)
             .build();
 
     static final PropertyDescriptor HIVE_CONFIGURATION_RESOURCES = new PropertyDescriptor.Builder()
@@ -155,6 +148,7 @@ public class PutHive3StreamingFixed extends AbstractProcessor {
                     + "Please see the Hive documentation for more details.")
             .required(false)
             .addValidator(HiveUtils.createMultipleFilesExistValidator())
+            .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
             .build();
 
     static final PropertyDescriptor DB_NAME = new PropertyDescriptor.Builder()
@@ -323,7 +317,7 @@ public class PutHive3StreamingFixed extends AbstractProcessor {
         ComponentLog log = getLogger();
         rollbackOnFailure = context.getProperty(ROLLBACK_ON_FAILURE).asBoolean();
 
-        final String configFiles = context.getProperty(HIVE_CONFIGURATION_RESOURCES).getValue();
+        final String configFiles = context.getProperty(HIVE_CONFIGURATION_RESOURCES).evaluateAttributeExpressions().getValue();
         hiveConfig = hiveConfigurator.getConfigurationFromFiles(configFiles);
 
         // If more than one concurrent task, force 'hcatalog.hive.client.cache.disabled' to true
@@ -376,13 +370,26 @@ public class PutHive3StreamingFixed extends AbstractProcessor {
         final String tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions(flowFile).getValue();
 
         final ComponentLog log = getLogger();
-        final String metastoreUri = context.getProperty(METASTORE_URI).evaluateAttributeExpressions(flowFile).getValue();
+        String metastoreURIs = null;
+        if (context.getProperty(METASTORE_URI).isSet()) {
+            metastoreURIs = context.getProperty(METASTORE_URI).evaluateAttributeExpressions(flowFile).getValue();
+            if (StringUtils.isEmpty(metastoreURIs)) {
+                // Shouldn't be empty at this point, log an error, penalize the flow file, and return
+                log.error("The '" + METASTORE_URI.getDisplayName() + "' property evaluated to null or empty, penalizing flow file, routing to failure");
+                session.transfer(session.penalize(flowFile), REL_FAILURE);
+            }
+        }
 
         final String partitionValuesString = context.getProperty(PARTITION_VALUES).evaluateAttributeExpressions(flowFile).getValue();
         final boolean autoCreatePartitions = context.getProperty(AUTOCREATE_PARTITIONS).asBoolean();
         final boolean disableStreamingOptimizations = context.getProperty(DISABLE_STREAMING_OPTIMIZATIONS).asBoolean();
 
-        HiveOptions o = new HiveOptions(metastoreUri, dbName, tableName)
+        // Override the Hive Metastore URIs in the config if set by the user
+        if (metastoreURIs != null) {
+           hiveConfig.set(MetastoreConf.ConfVars.THRIFT_URIS.getHiveName(), metastoreURIs);
+        }
+
+        HiveOptions o = new HiveOptions(metastoreURIs, dbName, tableName)
                 .withHiveConf(hiveConfig)
                 .withAutoCreatePartitions(autoCreatePartitions)
                 .withCallTimeout(callTimeout)
@@ -406,11 +413,10 @@ public class PutHive3StreamingFixed extends AbstractProcessor {
 
         StreamingConnection hiveStreamingConnection = null;
 
-        try (final InputStream rawIn = session.read(flowFile)) {
+        try (final InputStream in = session.read(flowFile)) {
             final RecordReader reader;
 
-            try (final BufferedInputStream in = new BufferedInputStream(rawIn)) {
-
+            try {
                 // if we fail to create the RecordReader then we want to route to failure, so we need to
                 // handle this separately from the other IOExceptions which normally route to retry
                 try {
@@ -420,19 +426,12 @@ public class PutHive3StreamingFixed extends AbstractProcessor {
                 }
 
                 hiveStreamingConnection = makeStreamingConnection(options, reader);
-                /* --- CHANGED ---
-                 * Fix memory leak in PutHive3Streaming
-                 */
-                // Add shutdown handler with higher priority than FileSystem shutdown hook so that streaming connection gets closed first before
-                // filesystem close (to avoid ClosedChannelException)
-                // ShutdownHookManager.addShutdownHook(hiveStreamingConnection::close, FileSystem.SHUTDOWN_HOOK_PRIORITY + 1);
-                /* --- CHANGED --- */
 
                 // Write records to Hive streaming, then commit and close
                 hiveStreamingConnection.beginTransaction();
                 hiveStreamingConnection.write(in);
                 hiveStreamingConnection.commitTransaction();
-                rawIn.close();
+                in.close();
 
                 Map<String, String> updateAttributes = new HashMap<>();
                 updateAttributes.put(HIVE_STREAMING_RECORD_COUNT_ATTR, Long.toString(hiveStreamingConnection.getConnectionStats().getRecordsWritten()));
@@ -447,7 +446,11 @@ public class PutHive3StreamingFixed extends AbstractProcessor {
                     throw new ShouldRetryException(te.getLocalizedMessage(), te);
                 }
             } catch (RecordReaderFactoryException rrfe) {
-                throw new ProcessException(rrfe);
+                if (rollbackOnFailure) {
+                    throw new ProcessException(rrfe);
+                } else {
+                    session.transfer(flowFile, REL_FAILURE);
+                }
             }
         } catch (InvalidTable | SerializationError | StreamingIOFailure | IOException e) {
             if (rollbackOnFailure) {
